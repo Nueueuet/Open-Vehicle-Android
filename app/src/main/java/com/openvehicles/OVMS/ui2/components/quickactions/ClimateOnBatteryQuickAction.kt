@@ -50,6 +50,15 @@ class ClimateOnBatteryQuickAction(
         return knownState == true
     }
 
+    /**
+     * The icon says where the energy comes from: a battery when the car may
+     * pre-condition off the traction battery, a plug when it insists on being
+     * connected. Clearer than one icon that only changes colour.
+     */
+    override fun getLiveCarIconId(state: Boolean): Int {
+        return if (state) R.drawable.ic_battery else R.drawable.ic_charging
+    }
+
     override fun commandsAvailable(): Boolean {
         return getCarData()?.car_type == "VWEG"
     }
