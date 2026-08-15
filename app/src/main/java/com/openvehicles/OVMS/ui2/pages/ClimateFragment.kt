@@ -35,6 +35,14 @@ class ClimateFragment : BaseFragment(), OnResultCommandListener {
 
     private lateinit var climateActionsAdapter: QuickActionsAdapter
 
+    /**
+     * Right-hand button column. Used only where the card carries the target
+     * temperature slider (VW e-Golf): the start button sits there because that
+     * is where the thumb falls with the phone in the right hand. Everywhere
+     * else it stays empty and gone, so those vehicles keep the layout they had.
+     */
+    private lateinit var climateActionsRightAdapter: QuickActionsAdapter
+
 
 
 
@@ -53,6 +61,11 @@ class ClimateFragment : BaseFragment(), OnResultCommandListener {
 
         climateActionsRecyclerView.layoutManager = LinearLayoutManager(requireContext(), LinearLayoutManager.VERTICAL, false)
         climateActionsRecyclerView.adapter = climateActionsAdapter
+
+        val rightRecyclerView = findViewById(R.id.climateActionsRight) as RecyclerView
+        climateActionsRightAdapter = QuickActionsAdapter(context)
+        rightRecyclerView.layoutManager = LinearLayoutManager(requireContext(), LinearLayoutManager.VERTICAL, false)
+        rightRecyclerView.adapter = climateActionsRightAdapter
 
         initialiseTargetTempSlider()
         initialiseCarRendering(carData)
@@ -101,7 +114,8 @@ class ClimateFragment : BaseFragment(), OnResultCommandListener {
 
     private fun showTargetTemp(value: Float) {
         val label = findViewById(R.id.ccTempLabel) as TextView
-        label.text = getString(R.string.climate_target_temp, formatTemp(value) + " °C")
+        // Just the value — the slider directly beneath it makes clear what it is.
+        label.text = formatTemp(value) + " °C"
     }
 
     /** Applies `cctemp=22.0 onbat=1` as reported by the module. */
@@ -116,6 +130,7 @@ class ClimateFragment : BaseFragment(), OnResultCommandListener {
         Regex("onbat=([01])").find(text)?.groupValues?.get(1)?.let {
             ClimateOnBatteryQuickAction.knownState = (it == "1")
             climateActionsAdapter.notifyDataSetChanged()
+            climateActionsRightAdapter.notifyDataSetChanged()
         }
     }
 
@@ -227,16 +242,26 @@ class ClimateFragment : BaseFragment(), OnResultCommandListener {
 
         climateActionsAdapter.mData.clear()
         climateActionsAdapter.setCarData(carData)
-        climateActionsAdapter.mData += ClimateQuickAction({getService()})
-        // e-Golf: second button for "pre-condition without the charging cable".
-        if (carData?.car_type == "VWEG")
+        climateActionsRightAdapter.mData.clear()
+        climateActionsRightAdapter.setCarData(carData)
+
+        val rightColumn = findViewById(R.id.climateActionsRight) as RecyclerView
+        if (carData?.car_type == "VWEG") {
+            // Start on the right, where the thumb falls; "without cable" on the left.
             climateActionsAdapter.mData += ClimateOnBatteryQuickAction({getService()}, context)
+            climateActionsRightAdapter.mData += ClimateQuickAction({getService()})
+            rightColumn.visibility = View.VISIBLE
+        } else {
+            climateActionsAdapter.mData += ClimateQuickAction({getService()})
+            rightColumn.visibility = View.GONE
+        }
         if (carData?.car_type in listOf("NL","SE","SQ","VWUP","VWUP.T26","RZ","RZ2")
             || carData?.car_type.orEmpty().startsWith("VA")
             || carData?.car_type.orEmpty().startsWith("VB")
             || carData?.car_type.orEmpty().startsWith("OAE"))
             climateActionsAdapter.mData += ClimateScheduleQuickAction({getService()})
         climateActionsAdapter.notifyDataSetChanged()
+        climateActionsRightAdapter.notifyDataSetChanged()
     }
 
     override fun update(carData: CarData?) {
