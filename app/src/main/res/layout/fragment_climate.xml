@@ -150,14 +150,21 @@
                 app:layout_constraintStart_toStartOf="@+id/cabinTempTxt"
                 app:layout_constraintTop_toBottomOf="@+id/cabinTempTxt" />
 
+            <!--
+                Gehoert zu den Messwerten, nicht zu den Knoepfen: Sie sagt, dass
+                die angezeigten Temperaturen veraltet sind. Deshalb mittig
+                darunter und nicht am Kartenrand, wo sie wie eine Beschriftung
+                des naechstgelegenen Knopfes aussieht.
+            -->
             <TextView
                 android:id="@+id/staleDataLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textAllCaps="false"
                 android:textSize="12sp"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintTop_toBottomOf="@+id/climateActionsRight"
+                app:layout_constraintEnd_toEndOf="@+id/tempUnit2"
+                app:layout_constraintStart_toStartOf="@+id/ambientTemp"
+                app:layout_constraintTop_toBottomOf="@+id/cabinTempTxt"
                 tools:text="@string/stale_data" />
 
             <!--

@@ -46,6 +46,25 @@ class ClimateOnBatteryQuickAction(
         setActionState(knownState == true)
     }
 
+    /**
+     * The button must show what the car holds, not what we assumed when the
+     * tap went out. A write is answered by the module's own confirmation, but
+     * the setting can equally change from the car's own menus or another
+     * client — so after every successful command we ask again and take the
+     * answer as truth.
+     */
+    override fun onCommandSuccess(command: String, details: String?) {
+        val status = Regex("onbat=([01])").find(details ?: "")
+        if (status != null) {
+            // This was the status query — adopt it silently, no toast.
+            knownState = status.groupValues[1] == "1"
+            setActionState(knownState == true)
+            return
+        }
+        super.onCommandSuccess(command, details)
+        sendCommand("7,xvg ccstatus")
+    }
+
     override fun getStateFromCarData(): Boolean {
         return knownState == true
     }
