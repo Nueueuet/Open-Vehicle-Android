@@ -275,10 +275,23 @@ class ClimateFragment : BaseFragment(), OnResultCommandListener {
         val resCode = result[1].toInt()
         val resText = if (result.size > 2) result[2] else ""
         val cmdMessage = getSentCommandMessage(result[0])
-        // Status reply from `xvg ccstatus` / a write: sync slider and button.
+        // Status reply from `xvg ccstatus`: sync slider and button.
         if (resCode == 0 && resText.contains("cctemp=")) {
             applyClimateStatus(resText)
             cancelCommand()
+            return
+        }
+        // Anything else we sent for this car changes the stored profile, and the
+        // module may well have refused it — a sleeping car cannot be written to.
+        // Never leave the slider showing a value the car does not hold: ask what
+        // it actually is now. The reply lands in the branch above.
+        // result[0] is the command *code*, not the text we sent — BaseFragment
+        // keys its message map on command.split(",")[0]. 7 is "execute command",
+        // and for this vehicle the only ones this tab sends are the xvg writes.
+        if (carData?.car_type == "VWEG" && result[0] == "7") {
+            if (resText.isNotEmpty())
+                Toast.makeText(activity, resText, Toast.LENGTH_LONG).show()
+            sendCommand("", "7,xvg ccstatus", this)
             return
         }
         val context: Context? = activity
