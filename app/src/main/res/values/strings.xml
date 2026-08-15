@@ -973,5 +973,7 @@
     <string name="Copy">Copy</string>
     <string name="more">More</string>
     <string name="lb_restart_time_off">Stop restart</string>
+    <string name="climate_on_battery_short">On battery</string>
+    <string name="climate_target_temp">Target %s</string>
 
 </resources>

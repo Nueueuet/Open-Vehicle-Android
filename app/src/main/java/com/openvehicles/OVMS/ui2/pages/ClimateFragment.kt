@@ -10,14 +10,17 @@ import android.view.ViewGroup
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.google.android.material.slider.Slider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.openvehicles.OVMS.R
 import com.openvehicles.OVMS.api.OnResultCommandListener
 import com.openvehicles.OVMS.entities.CarData
 import com.openvehicles.OVMS.ui.BaseFragment
+import com.openvehicles.OVMS.ui2.components.quickactions.ClimateOnBatteryQuickAction
 import com.openvehicles.OVMS.ui2.components.quickactions.ClimateQuickAction
 import com.openvehicles.OVMS.ui2.components.quickactions.ClimateScheduleQuickAction
 import com.openvehicles.OVMS.ui2.components.quickactions.adapters.QuickActionsAdapter
@@ -51,8 +54,69 @@ class ClimateFragment : BaseFragment(), OnResultCommandListener {
         climateActionsRecyclerView.layoutManager = LinearLayoutManager(requireContext(), LinearLayoutManager.VERTICAL, false)
         climateActionsRecyclerView.adapter = climateActionsAdapter
 
+        initialiseTargetTempSlider()
         initialiseCarRendering(carData)
         initialiseClimateControls(carData)
+    }
+
+    /**
+     * Target temperature for pre-conditioning.
+     *
+     * Only shown for vehicles whose module can set it — currently the VW e-Golf,
+     * where the value lives in the car's stored BatteryControl profile and the
+     * module writes it back with `xvg cctemp`. Set up once here rather than in
+     * [initialiseClimateControls], which runs again on every data update and
+     * would otherwise stack listeners.
+     */
+    private fun initialiseTargetTempSlider() {
+        val group = findViewById(R.id.ccTempGroup) as LinearLayout
+        if (carData?.car_type != "VWEG") {
+            group.visibility = View.GONE
+            return
+        }
+        group.visibility = View.VISIBLE
+
+        val slider = findViewById(R.id.ccTempSlider) as Slider
+        slider.addOnChangeListener { _, value, _ -> showTargetTemp(value) }
+        slider.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(s: Slider) {}
+            override fun onStopTrackingTouch(s: Slider) {
+                // Send on release only — sending while dragging would put a write
+                // on the car's comfort bus for every step.
+                sendCommand(
+                    getString(R.string.climate_target_temp, formatTemp(s.value)),
+                    "7,xvg cctemp " + formatTemp(s.value),
+                    this@ClimateFragment
+                )
+            }
+        })
+        showTargetTemp(slider.value)
+
+        // The car never answers a read request for its profile, so the module
+        // reports what it last saw. Ask once when the tab opens.
+        sendCommand("", "7,xvg ccstatus", this)
+    }
+
+    private fun formatTemp(value: Float): String = DecimalFormat("0.0").format(value)
+
+    private fun showTargetTemp(value: Float) {
+        val label = findViewById(R.id.ccTempLabel) as TextView
+        label.text = getString(R.string.climate_target_temp, formatTemp(value) + " °C")
+    }
+
+    /** Applies `cctemp=22.0 onbat=1` as reported by the module. */
+    private fun applyClimateStatus(text: String) {
+        Regex("cctemp=([0-9.]+)").find(text)?.groupValues?.get(1)?.toFloatOrNull()?.let {
+            val slider = findViewById(R.id.ccTempSlider) as Slider
+            if (it >= slider.valueFrom && it <= slider.valueTo) {
+                slider.value = it
+                showTargetTemp(it)
+            }
+        }
+        Regex("onbat=([01])").find(text)?.groupValues?.get(1)?.let {
+            ClimateOnBatteryQuickAction.knownState = (it == "1")
+            climateActionsAdapter.notifyDataSetChanged()
+        }
     }
 
     private fun initialiseCarRendering(carData: CarData?) {
@@ -164,6 +228,9 @@ class ClimateFragment : BaseFragment(), OnResultCommandListener {
         climateActionsAdapter.mData.clear()
         climateActionsAdapter.setCarData(carData)
         climateActionsAdapter.mData += ClimateQuickAction({getService()})
+        // e-Golf: second button for "pre-condition without the charging cable".
+        if (carData?.car_type == "VWEG")
+            climateActionsAdapter.mData += ClimateOnBatteryQuickAction({getService()}, context)
         if (carData?.car_type in listOf("NL","SE","SQ","VWUP","VWUP.T26","RZ","RZ2")
             || carData?.car_type.orEmpty().startsWith("VA")
             || carData?.car_type.orEmpty().startsWith("VB")
@@ -183,6 +250,12 @@ class ClimateFragment : BaseFragment(), OnResultCommandListener {
         val resCode = result[1].toInt()
         val resText = if (result.size > 2) result[2] else ""
         val cmdMessage = getSentCommandMessage(result[0])
+        // Status reply from `xvg ccstatus` / a write: sync slider and button.
+        if (resCode == 0 && resText.contains("cctemp=")) {
+            applyClimateStatus(resText)
+            cancelCommand()
+            return
+        }
         val context: Context? = activity
         if (context != null) {
             when (resCode) {

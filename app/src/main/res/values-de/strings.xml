@@ -891,5 +891,7 @@
     <string name="Clear">Löschen</string>
     <string name="Copy">Kopieren</string>
     <string name="more">Mehr</string>
+    <string name="climate_on_battery_short">Ohne Kabel</string>
+    <string name="climate_target_temp">Zieltemperatur %s</string>
 
 </resources>
