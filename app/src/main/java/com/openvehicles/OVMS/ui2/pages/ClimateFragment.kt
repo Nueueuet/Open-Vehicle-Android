@@ -20,7 +20,6 @@ import com.openvehicles.OVMS.R
 import com.openvehicles.OVMS.api.OnResultCommandListener
 import com.openvehicles.OVMS.entities.CarData
 import com.openvehicles.OVMS.ui.BaseFragment
-import com.openvehicles.OVMS.ui2.components.quickactions.ClimateOnBatteryQuickAction
 import com.openvehicles.OVMS.ui2.components.quickactions.ClimateQuickAction
 import com.openvehicles.OVMS.ui2.components.quickactions.ClimateScheduleQuickAction
 import com.openvehicles.OVMS.ui2.components.quickactions.adapters.QuickActionsAdapter
@@ -105,8 +104,8 @@ class ClimateFragment : BaseFragment(), OnResultCommandListener {
         })
         showTargetTemp(slider.value)
 
-        // The car never answers a read request for its profile, so the module
-        // reports what it last saw. Ask once when the tab opens.
+        // The target temperature is not carried by the v2 protocol, so it cannot
+        // come in with the metrics — ask the module for it when the tab opens.
         sendCommand("", "7,xvg ccstatus", this)
     }
 
@@ -118,19 +117,21 @@ class ClimateFragment : BaseFragment(), OnResultCommandListener {
         label.text = formatTemp(value) + " °C"
     }
 
-    /** Applies `cctemp=22.0 onbat=1` as reported by the module. */
+    /**
+     * Applies `cctemp=22.0 current=32 valid=1` as reported by the module.
+     *
+     * `valid=0` means the module has not read the car's profile yet, so the
+     * value carries no information — leave the slider where it is rather than
+     * snapping it to a placeholder.
+     */
     private fun applyClimateStatus(text: String) {
+        if (Regex("valid=0").containsMatchIn(text)) return
         Regex("cctemp=([0-9.]+)").find(text)?.groupValues?.get(1)?.toFloatOrNull()?.let {
             val slider = findViewById(R.id.ccTempSlider) as Slider
             if (it >= slider.valueFrom && it <= slider.valueTo) {
                 slider.value = it
                 showTargetTemp(it)
             }
-        }
-        Regex("onbat=([01])").find(text)?.groupValues?.get(1)?.let {
-            ClimateOnBatteryQuickAction.knownState = (it == "1")
-            climateActionsAdapter.notifyDataSetChanged()
-            climateActionsRightAdapter.notifyDataSetChanged()
         }
     }
 
@@ -245,14 +246,20 @@ class ClimateFragment : BaseFragment(), OnResultCommandListener {
         climateActionsRightAdapter.mData.clear()
         climateActionsRightAdapter.setCarData(carData)
 
+        val leftColumn = findViewById(R.id.climateActions) as RecyclerView
         val rightColumn = findViewById(R.id.climateActionsRight) as RecyclerView
         if (carData?.car_type == "VWEG") {
-            // Start on the right, where the thumb falls; "without cable" on the left.
-            climateActionsAdapter.mData += ClimateOnBatteryQuickAction({getService()}, context)
+            // Start on the right, where the thumb falls with the phone in the right
+            // hand. There is deliberately no "climatise without the cable" button:
+            // that profile bit is owned by the module, which sets it for a climate
+            // command and clears it for a charge — a user-facing toggle would fight
+            // the firmware and show a state that changes under the user's hands.
             climateActionsRightAdapter.mData += ClimateQuickAction({getService()})
+            leftColumn.visibility = View.GONE
             rightColumn.visibility = View.VISIBLE
         } else {
             climateActionsAdapter.mData += ClimateQuickAction({getService()})
+            leftColumn.visibility = View.VISIBLE
             rightColumn.visibility = View.GONE
         }
         if (carData?.car_type in listOf("NL","SE","SQ","VWUP","VWUP.T26","RZ","RZ2")
